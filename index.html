@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Transcription App</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #121212;
+            color: #ffffff !important;
+            height: 100vh;
+        }
+        .box, .button, .select select, .input {
+            background-color: #1e1e1e;
+            color: #ffffff;
+            border: none;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+        .box {
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .button.is-primary {
+            background-color: #6200ea;
+        }
+        .button.is-danger {
+            background-color: #b00020;
+        }
+        .button.is-link {
+            background-color: #03dac6;
+        }
+        .button:hover {
+            transform: scale(1.05);
+        }
+        .button.is-primary:hover {
+            background-color: #7e3ff2;
+        }
+        .button.is-danger:hover {
+            background-color: #d32f2f;
+        }
+        .button.is-link:hover {
+            background-color: #26e8d6;
+        }
+        .history-item {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #2c2c2c;
+            border-radius: 8px;
+            transition: background-color 0.3s, transform 0.3s;
+        }
+        .history-item:hover {
+            background-color: #3a3a3a;
+            transform: scale(1.02);
+        }
+        .title, .subtitle, label {
+            color: #ffffff !important;
+        }
+        .input, .select select {
+            color: #ffffff !important;
+        }
+    </style>
+</head>
+<body>
+    <section class="section">
+        <div class="columns is-centered">
+            <div class="column is-half">
+                <h1 class="title has-text-centered">Voice Transcription App</h1>
+                <div class="buttons is-centered">
+                    <button id="recordButton" class="button is-primary">Start Recording</button>
+                    <button id="stopButton" class="button is-danger" disabled>Stop Recording</button>
+                </div>
+
+                <div id="transcription" class="box">
+                    <h2 class="subtitle">Transcription:</h2>
+                    <p id="transcriptText">(Your transcription will appear here)</p>
+                </div>
+
+                <audio id="audioPlayback" controls></audio>
+
+                <div id="controls" class="field is-grouped is-grouped-centered">
+                    <div class="control">
+                        <label for="filter" class="label">Audio Filter:</label>
+                        <div class="select">
+                            <select id="filter">
+                                <option value="none">None</option>
+                                <option value="lowpass">Low-Pass</option>
+                                <option value="highpass">High-Pass</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="control">
+                        <button id="applyFilter" class="button is-link">Apply Filter</button>
+                    </div>
+                </div>
+
+                <div id="history" class="box">
+                    <h2 class="subtitle">History:</h2>
+                    <div id="historyList"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let audioBlob;
+        const recordButton = document.getElementById('recordButton');
+        const stopButton = document.getElementById('stopButton');
+        const transcriptText = document.getElementById('transcriptText');
+        const audioPlayback = document.getElementById('audioPlayback');
+        const filterSelect = document.getElementById('filter');
+        const historyList = document.getElementById('historyList');
+
+        // Speech recognition setup
+        const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+        recognition.lang = 'en-US';
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recordButton.addEventListener('click', async () => {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            let audioUrl;
+
+            mediaRecorder.ondataavailable = (event) => {
+                audioChunks.push(event.data);
+            };
+
+            mediaRecorder.onstop = () => {
+                audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                audioUrl = URL.createObjectURL(audioBlob);
+                audioPlayback.src = audioUrl;
+                audioChunks = [];
+                
+            };
+
+            recognition.start();
+            recognition.onresult = (event) => {
+                const transcript = event.results[0][0].transcript;
+                transcriptText.textContent = transcript;
+                saveToHistory(transcriptText.textContent, audioUrl);
+            };
+
+            recordButton.disabled = true;
+            stopButton.disabled = false;
+            mediaRecorder.start();
+        });
+
+        stopButton.addEventListener('click', () => {
+            mediaRecorder.stop();
+            recognition.stop();
+            recordButton.disabled = false;
+            stopButton.disabled = true;
+        });
+
+        let audioContext;
+        let source;
+
+        document.getElementById('applyFilter').addEventListener('click', () => {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                source = audioContext.createMediaElementSource(audioPlayback);
+            }
+
+            const filter = filterSelect.value;
+            let biquadFilter = audioContext.createBiquadFilter();
+
+            if (filter === 'lowpass') {
+                biquadFilter.type = 'lowpass';
+                biquadFilter.frequency.setValueAtTime(1000, audioContext.currentTime);
+            } else if (filter === 'highpass') {
+                biquadFilter.type = 'highpass';
+                biquadFilter.frequency.setValueAtTime(1000, audioContext.currentTime);
+            }
+
+            source.connect(biquadFilter);
+            biquadFilter.connect(audioContext.destination);
+        });
+
+        function saveToHistory(transcript, audioUrl) {
+            const historyItem = document.createElement('div');
+            historyItem.classList.add('history-item');
+            historyItem.innerHTML = `
+                <p><strong style='color:#ffffff;'>Transcription:</strong> ${transcript}</p>
+                <audio controls src="${audioUrl}"></audio>
+                <input type="text" class="input" placeholder="Enter name" style='color:#ffffff;'/>
+                <button class="button is-link downloadButton">Download</button>
+                <button class="button is-danger deleteButton">Delete</button>
+            `;
+            historyList.appendChild(historyItem);
+
+            const downloadButton = historyItem.querySelector('.downloadButton');
+            const deleteButton = historyItem.querySelector('.deleteButton');
+            const inputField = historyItem.querySelector('input');
+
+            downloadButton.addEventListener('click', () => {
+                const name = inputField.value || 'transcription';
+                const link = document.createElement('a');
+                link.href = audioUrl;
+                link.download = `${name}.wav`;
+                link.click();
+            });
+
+            deleteButton.addEventListener('click', () => {
+                historyList.removeChild(historyItem);
+            });
+        }
+    </script>
+</body>
+</html>
