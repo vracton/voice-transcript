@@ -1,5 +1,7 @@
 # voice-transcript
 
+**NOTE: this doesn't work in all browsers, such as opera. however, it is confirmed to be working on edge, so try that if it doesn't seem to be working**
+
 ![image](https://github.com/user-attachments/assets/2228eefa-d4f4-440b-b400-78354d40d43f)
 
 This website allows you to take audio recordings and then get a transcript from them!
